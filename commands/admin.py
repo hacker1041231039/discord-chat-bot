@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from loguru import logger
+from typing import Union, Optional
 
 from bot import ChatBot
 from config import settings
@@ -200,7 +201,7 @@ class AdminCommands(commands.Cog):
     async def clear_history_prefix(
         self,
         ctx: commands.Context,
-        target: discord.Member | discord.TextChannel | None = None,
+        target: Optional[Union[discord.Member, discord.TextChannel]] = None,
     ) -> None:
         """Clear conversation history (prefix command)."""
         await self._clear_history(ctx, target)
@@ -213,15 +214,15 @@ class AdminCommands(commands.Cog):
     async def clear_history_slash(
         self,
         interaction: discord.Interaction,
-        target: discord.Member | discord.TextChannel | None = None,
+        target: Optional[Union[discord.Member, discord.TextChannel]] = None,
     ) -> None:
         """Clear conversation history (slash command)."""
         await self._clear_history(interaction, target)
 
-    async def _clear_history(
+async def _clear_history(
         self,
         destination,
-        target: discord.Member | discord.TextChannel | None,
+        target: Optional[Union[discord.Member, discord.TextChannel]] = None,
     ) -> None:
         """Clear conversation history."""
         if target is None:
