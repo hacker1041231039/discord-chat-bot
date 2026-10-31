@@ -13,6 +13,17 @@ from utils.conversation import conversation_manager
 from utils.rate_limiter import rate_limiter
 
 
+def is_owner_check():
+    """Custom check for slash commands - only bot owner can use."""
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if interaction.client.owner_id is None:
+            # Fetch owner if not cached
+            app_info = await interaction.client.application_info()
+            interaction.client.owner_id = app_info.owner.id
+        return interaction.user.id == interaction.client.owner_id
+    return app_commands.check(predicate)
+
+
 class AdminCommands(commands.Cog):
     """Administrative and moderation commands."""
 
@@ -114,7 +125,7 @@ class AdminCommands(commands.Cog):
     # Slash command: /reload
     @app_commands.command(name="reload", description="Reload a cog (owner only)")
     @app_commands.describe(cog="Cog name to reload (e.g., commands.general)")
-    @app_commands.checks.is_owner()
+    @is_owner_check()
     async def reload_slash(self, interaction: discord.Interaction, cog: str) -> None:
         """Reload a cog (slash command, owner only)."""
         await self._reload_cog(interaction, cog)
@@ -152,7 +163,7 @@ class AdminCommands(commands.Cog):
     # Slash command: /sync
     @app_commands.command(name="sync", description="Sync slash commands (owner only)")
     @app_commands.describe(guild_only="Sync only to current guild")
-    @app_commands.checks.is_owner()
+    @is_owner_check()
     async def sync_slash(self, interaction: discord.Interaction, guild_only: bool = False) -> None:
         """Sync slash commands (slash command, owner only)."""
         await self._sync_commands(interaction, guild_only)
@@ -276,7 +287,7 @@ class AdminCommands(commands.Cog):
         action="Action to perform: reset, status",
         user="Target user (default: yourself for status)",
     )
-    @app_commands.checks.is_owner()
+    @is_owner_check()
     async def rate_limit_slash(
         self,
         interaction: discord.Interaction,
@@ -340,7 +351,7 @@ class AdminCommands(commands.Cog):
 
     # Slash command: /shutdown
     @app_commands.command(name="shutdown", description="Shutdown the bot (owner only)")
-    @app_commands.checks.is_owner()
+    @is_owner_check()
     async def shutdown_slash(self, interaction: discord.Interaction) -> None:
         """Shutdown the bot (slash command, owner only)."""
         await interaction.response.send_message("🛑 Shutting down...", ephemeral=True)
@@ -363,6 +374,31 @@ class AdminCommands(commands.Cog):
         else:
             logger.error(f"Admin command error: {error}", exc_info=error)
             await ctx.send("An error occurred.")
+
+    async def cog_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        """Handle errors in admin slash commands."""
+        if isinstance(error, app_commands.CheckFailure):
+            await interaction.response.send_message(
+                "This command is restricted to the bot owner.", ephemeral=True
+            )
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "You don't have permission to use this command.", ephemeral=True
+            )
+        elif isinstance(error, app_commands.BotMissingPermissions):
+            await interaction.response.send_message(
+                "I don't have the required permissions.", ephemeral=True
+            )
+        else:
+            logger.error(f"Admin slash command error: {error}", exc_info=error)
+            if not interaction.response.is_done():
+                await interaction.response.send_message("An error occurred.", ephemeral=True)
+            else:
+                await interaction.followup.send("An error occurred.", ephemeral=True)
 
 
 async def setup(bot: ChatBot) -> None:
